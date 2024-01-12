@@ -302,7 +302,7 @@ contract MultiSigWallet is Context {
         emit Approved(msg.sender, txId);
 
         if (oldOwnerToRemove.approvalCount >= getThresholdNbr()) {
-            owners.push(oldOwnerToRemove.to);
+            delete owners[oldOwnerToRemove.txId];
             emit OldOwnerRemoved(oldOwnerToRemove.to, txId);
         }
     }
