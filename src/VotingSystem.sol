@@ -79,11 +79,6 @@ contract VotingSystem is Ownable {
         _;
     }
 
-    modifier isVoter() {
-        require(voterExists[_msgSender()], "Voter does not exist");
-        _;
-    }
-
     modifier hasNotVoted(uint256 _electionId) {
         require(!hasVotedInElection[_electionId][_msgSender()], "Voter already voted");
         _;
@@ -105,7 +100,7 @@ contract VotingSystem is Ownable {
         _;
     }
 
-// Candidate registration/removal
+// Candidate registration
     function addCandidate(address _candidate) public onlyOwner() notCandidate(_candidate) {
         candidateExists[_candidate] = true;
         candidates.push(Candidate({
@@ -116,16 +111,7 @@ contract VotingSystem is Ownable {
         emit NewCandidateAdded(_candidate);
     }
 
-    function removeCandidate(uint256 _candidateId, address _candidate) public
-            onlyOwner() isCandidate(_candidate) {
-        require(candidates[_candidateId].addy == _candidate, "Candidate Id does not match addy");
-        candidateExists[_candidate] = false;
-        delete candidates[_candidateId];
-
-        emit OldCandidateRemoved(_candidate);
-    }
-
-// Voter registration/removal
+// Voter registration
     function registerToVote() public notVoter() {
         voterExists[_msgSender()] = true;
         voters.push(Voter({
@@ -134,14 +120,6 @@ contract VotingSystem is Ownable {
         }));
 
         emit NewVoterAdded(_msgSender());
-    }
-
-    function unregisterFromVote(uint256 _voterId) public isVoter() {
-        require(voters[_voterId].addy == _msgSender(), "Voter Id does not match addy");
-        voterExists[_msgSender()] = false;
-        delete voters[_voterId];
-
-        emit OldVoterRemoved(_msgSender());
     }
 
 // Election creation
@@ -162,7 +140,7 @@ contract VotingSystem is Ownable {
 
 // Voting
     function voteFor(address _candidate, uint256 _electionId) public 
-            isElection(_electionId) votingOpen(_electionId) isCandidate(_candidate) hasNotVoted(_electionId) {
+            isCandidate(_candidate) isElection(_electionId) votingOpen(_electionId) hasNotVoted(_electionId) {
         addToCandidatesWithVotes(_electionId, _candidate);
         votesCountByCandidateByElection[_electionId][_candidate]++;
         hasVotedInElection[_electionId][_msgSender()] = true;
@@ -190,8 +168,8 @@ contract VotingSystem is Ownable {
         }
     }
 
-    function getSortedCandidatesByVotes(address[] memory _candidates, uint256 _electionId) internal view
-            returns(address[] memory) {
+    function getSortedCandidatesByVotes(address[] memory _candidates, uint256 _electionId) 
+            internal view returns(address[] memory) {
         uint256 i = 0; uint256 j;
         while (i < _candidates.length) {
             j = i + 1;
