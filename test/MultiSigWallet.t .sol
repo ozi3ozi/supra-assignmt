@@ -10,8 +10,6 @@ import { stdError } from "forge-std/src/Test.sol";
 
 import { MultiSigWallet } from "../src/MultiSigWallet.sol";
 
-/// @dev If this is your first time with Forge, read this tutorial in the Foundry Book:
-/// https://book.getfoundry.sh/forge/writing-tests
 contract MultiSigWalletTest is PRBTest, StdCheats, Context {
     MultiSigWallet internal multiSigWallet;
     address[] internal ownersToAdd;

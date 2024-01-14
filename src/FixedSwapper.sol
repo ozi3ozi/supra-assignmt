@@ -4,26 +4,48 @@ pragma solidity >=0.8.23;
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract FixedSwapper is Context {
 /**
- * Fixed exchange rate From A to B.
- * We use the smallest bits based on the tokens' respective decimals.
- * i.e. If the rate from A to B is 2, then 1 * 10**A_decimals = 2 * 10**B_decimals
- * Which gives the following:
- * decimalAdjustedRate = rate * 10**B_decimals / 10**A_decimals
- * amountOfB = amountOfA * decimalAdjustedRate
- * amountOfA = amountOfB / decimalAdjustedRate 
+ * Design choices:
+ * - I used the openzeppelin ERC20 contract for their reliability.
+ * - I used Decimal adjusted exchange rate to take into account ERC20 token that have decimals other than 18
+ * - I made shure to require correct contract's allowances and reserves and enough user's balance for tokens swapped
+ * - Inspired from Uniswap, I offered both exactIn and exactOut swaps
+ * - For security, readability and role of each function, I tried to keep them limited to ~6 lines
  */
-uint public immutable FXD_XCHG_RATE_A_TO_B;
-ERC20 public immutable tokenA;
-ERC20 public immutable tokenB;
+contract FixedSwapper is Context {
+// events
+    event Received(address indexed sender, uint amount);
+    event SwappedAToB(address indexed sender, uint amountIn, uint amountOut);
+    event SwappedBToA(address indexed sender, uint amountIn, uint amountOut);
 
-// constructor
+// immutables
+    /**
+    * Fixed exchange rate From A to B.
+    * We use the smallest bits based on the tokens' respective decimals.
+    * i.e. If the rate from A to B is 2, then 1 * 10**A_decimals = 2 * 10**B_decimals
+    * Which gives the following:
+    * decimalAdjustedRate = rate * 10**B_decimals / 10**A_decimals
+    * amountOfB = amountOfA * decimalAdjustedRate
+    * amountOfA = amountOfB / decimalAdjustedRate 
+    */
+    uint public immutable FXD_XCHG_RATE_A_TO_B;
+    ERC20 public immutable tokenA;
+    ERC20 public immutable tokenB;
+
+// modifiers
+    modifier notZeroAddress() {
+        require(_msgSender() != address(0), "zero address");
+        _;
+    }
+
+// functions
+    // constructor
     /**
      * @dev 
      * @param _tokenA Token A
      * @param _tokenB Token B
-     * @param _fxdXchgRateAtoB Fixed exchange rate of A to B. Must be greater than 0. i.e. rate of 2 means 1 * 10**A_decimals = 2 * 10**B_decimals
+     * @param _fxdXchgRateAtoB Fixed exchange rate of A to B. Must be greater than 0.
+     * i.e. rate of 2 means 1 * 10**A_decimals = 2 * 10**B_decimals
      * the _fxdXchgRateAtoB is used to get adjusted rate based on tokens' decimals
      */
     constructor(address _tokenA, address _tokenB, uint _fxdXchgRateAtoB) {
@@ -34,18 +56,15 @@ ERC20 public immutable tokenB;
         tokenB = ERC20(_tokenB);
         FXD_XCHG_RATE_A_TO_B = _fxdXchgRateAtoB * 10**tokenB.decimals() / 10**tokenA.decimals();
     }
-// events
-    event SwappedAToB(address indexed sender, uint amountIn, uint amountOut);
-    event SwappedBToA(address indexed sender, uint amountIn, uint amountOut);
 
-// modifiers
-    modifier notZeroAddress() {
-        require(_msgSender() != address(0), "zero address");
-        _;
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
     }
 
-// functions
-
+    /**
+     * @dev Uses full amount of token A and swaps it to B
+     * @param _amountIn Amount of token A to swap
+     */
     function swapExactAToB(uint256 _amountIn) external notZeroAddress {
         require(senderHasEnoughBalanceOf(tokenA, _amountIn), "insufficient balance");
         require(senderGaveEnoughAllowanceOf(tokenA, _amountIn), "insufficient allowance");
@@ -59,6 +78,10 @@ ERC20 public immutable tokenB;
         emit SwappedAToB(_msgSender(), _amountIn, _amountOut);
     }
 
+    /**
+     * @dev Uses amount of token B user wants to determine amount of token A required
+     * @param _amountOut Amount of token B to receive
+     */
     function swapAToExactB(uint256 _amountOut) external notZeroAddress {
         require(contractHasEnoughReservesOf(tokenB, _amountOut), "insufficient reserves");
 
@@ -72,6 +95,10 @@ ERC20 public immutable tokenB;
         emit SwappedAToB(_msgSender(), _amountIn, _amountOut);
     }
 
+    /**
+     * @dev Uses full amount of token B and swaps it to A
+     * @param _amountIn Amount of token B to swap
+     */
     function swapExactBtoA(uint256 _amountIn) external notZeroAddress {
         require(senderHasEnoughBalanceOf(tokenB, _amountIn), "insufficient balance");
         require(senderGaveEnoughAllowanceOf(tokenB, _amountIn), "insufficient allowance");
@@ -85,6 +112,10 @@ ERC20 public immutable tokenB;
         emit SwappedBToA(_msgSender(), _amountIn, _amountOut);
     }
 
+    /**
+     * @dev Uses amount of token A user wants to determine amount of token B required
+     * @param _amountOut Amount of token A to receive
+     */
     function swapBtoExactA(uint256 _amountOut) external notZeroAddress {
         require(contractHasEnoughReservesOf(tokenA, _amountOut), "insufficient reserves");
 
@@ -124,6 +155,9 @@ ERC20 public immutable tokenB;
         _amountA = _amountB / FXD_XCHG_RATE_A_TO_B;
     }
 
+    /**
+     * @dev Requires successful transfer to proceed
+     */
     function safeTransferFrom(
         address _from,
         address _to,

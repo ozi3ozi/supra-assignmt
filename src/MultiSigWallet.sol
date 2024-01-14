@@ -4,24 +4,22 @@ pragma solidity >=0.8.23;
 import "@openzeppelin/contracts/utils/Context.sol";
 
 /**
- * Multi-Signature Wallet
- * Problem Description:
- * Develop a multi-signature wallet smart contract using Solidity. The contract should allow multiple
- * owners to collectively control the funds in the wallet. The key features include:
- * ​
- * ​
- * ​
- * A wallet with multiple owners, each having their own private key.
- * A specified number of owners (threshold) is required to approve and execute a transaction.
- * Owners can submit, approve, and cancel transactions.
- * Requirements:
- * ● Implement the smart contract in Solidity.
- * ● Use appropriate data structures to manage owners and transactions.
- * ● Include proper access controls and security measures.
- * ● Ensure efficient handling of transactions and gas optimization.
+ * Design Choices:
+ * - I opted for a dynamic threshold. The threshold is a % based on the number of owners.
+ * - For security, readability and role of each function, I tried to keep them limited to ~4 lines
+ * - For flexibility when deploying, only the list of addresses provided are added to the contract. 
+ * msg.sender needs to be in that list to be added
+ * - Because it's a multi-sig wallet. owners must be at least 2.
+ *   Threshold number must also be at least 2.
+ * - InternalTransaction struct is used for adding/removing owners.
+ * - Transaction struct is used for all other transactions.
+ * - Executing a transaction is done automatically when the threshold is met.
+ * - I used mapping to quickly check if an owner approved a transaction.
+ * - I added the ability to refuse a transaction. 
+ *   If owners.length - refusalCount < threshold, the transaction is cancelled.
  */
 contract MultiSigWallet is Context {
-    // Events
+// Events
     event Received(address indexed sender, uint amount);
     event Submitted(address indexed owner, uint256 indexed txId);
     event Approved(address indexed owner, uint256 indexed txId);
@@ -32,6 +30,7 @@ contract MultiSigWallet is Context {
     event NewOwnerAdded(address indexed newOwner, uint256 indexed txId);
     event OldOwnerRemoved(address indexed oldOwner, uint256 indexed txId);
 
+// Structs and variables
     struct Transaction {
         uint256 txId;
         uint256 value;
@@ -70,7 +69,7 @@ contract MultiSigWallet is Context {
      */
     uint8 private thresholdPerct;
 
-    // modifiers
+// modifiers
     modifier onlyOwner() {
         require(isOwner[msg.sender], "not owner");
         _;
@@ -121,18 +120,7 @@ contract MultiSigWallet is Context {
         _;
     }
 
-    /**
-     * @dev The number of owners required to approve a transaction. Based on thresholdPerct.
-     * Minim 2 owners are required whatever the thresholdPerct.
-     * @return threshold The number of owners required to approve a transaction
-     */
-    function getThresholdNbr() public view returns(uint16 threshold) {
-        threshold = uint16(owners.length * thresholdPerct / 100);
-        // 1 is added to round up unless thresholdPerct is 100
-        threshold = thresholdPerct == 100 ? threshold : 
-            threshold < 2 ? 2 : threshold + 1;
-    }
-
+// Functions
     /**
      * @dev Constructor
      * @param _owners The owners of the multi-sig wallet. Cannot be empty
@@ -144,12 +132,28 @@ contract MultiSigWallet is Context {
 
         for (uint256 i = 0; i < _owners.length; i++) {
             require(_owners[i] != address(0), "zero address in owners list");
-            require(!isOwner[_owners[i]], "owner already exists");
+            require(!isOwner[_owners[i]], "owner already exists");// in case the list contains a double
             owners.push(_owners[i]);
             isOwner[_owners[i]] = true;
         }
 
         thresholdPerct = _threshold;
+    }
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
+    /**
+     * @dev The number of owners required to approve a transaction. Based on thresholdPerct.
+     * Min 2 owners are required whatever the thresholdPerct.
+     * @return threshold The number of owners required to approve a transaction
+     */
+    function getThresholdNbr() public view returns(uint16 threshold) {
+        threshold = uint16(owners.length * thresholdPerct / 100);
+        // 1 is added to round up unless thresholdPerct is 100
+        threshold = thresholdPerct == 100 ? threshold : 
+            threshold < 2 ? 2 : threshold + 1;
     }
 
     function getOwners() public view returns(address[] memory) {
@@ -166,10 +170,6 @@ contract MultiSigWallet is Context {
      
     function getOldOwnersToRemove() public view returns(InternalTransaction[] memory) {
         return oldOwnersToRemove;
-    }
-
-    function reveive() external payable {
-        emit Received(msg.sender, msg.value);
     }
 
     /**
@@ -208,12 +208,16 @@ contract MultiSigWallet is Context {
         emit Approved(msg.sender, txId);
 
         if (transaction.approvalCount >= getThresholdNbr()) {
-            (bool success, ) = payable(transaction.to).call{value: transaction.value}(
-                transactions[txId].data);
-            require(success, "failed to execute transaction");
-            transaction.executed = true;
-            emit Executed(msg.sender, txId);
+            executeTransaction(transaction);
         }
+    }
+
+    function executeTransaction(Transaction storage transaction) internal {
+        (bool success, ) = payable(transaction.to).call{value: transaction.value}(
+            transaction.data);
+        require(success, "failed to execute transaction");
+        transaction.executed = true;
+        emit Executed(msg.sender, transaction.txId);
     }
 
     /**
@@ -226,7 +230,8 @@ contract MultiSigWallet is Context {
         refusedTxsByOwner[txId][msg.sender] = true;
         emit Refused(msg.sender, txId);
 
-        if (transaction.refusalCount >= getThresholdNbr()) {
+        // Transaction wont get executed even if all remaining owners approve it
+        if (transaction.refusalCount > owners.length - getThresholdNbr()) { 
             transaction.cancelled = true;
             emit Cancelled(msg.sender, txId);
         }

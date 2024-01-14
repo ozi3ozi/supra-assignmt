@@ -3,29 +3,28 @@ pragma solidity >=0.8.23;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/**
+ * Design choices:
+ * - I used the openzeppelin contracts for their reliability.
+ * - For complete transparency, removing an old candidate, voter or election is not allowed.
+ * - Since an election contains candidatesWithVotes list, we don't have to use candidates list to display results.
+ * - For security, readability and role of each function, I tried to keep them limited to ~4 lines
+ */
 contract VotingSystem is Ownable {
-    constructor (address[] memory _candidates) 
-            Ownable(_msgSender()) {
-        for (uint256 i = 0; i < _candidates.length; i++) {
-            addCandidate(_candidates[i]);
-        }
-    }
-
 // events
     // The owner of the contract can add/remove candidates.
     event NewCandidateAdded(address indexed newCandidate);
-    event OldCandidateRemoved(address indexed oldCandidate);
 
     // Each voter can add/remove himself.
     event NewVoterAdded(address indexed newVoter);
-    event OldVoterRemoved(address indexed oldVoter);
     event VotedFor(address indexed voter, address indexed candidate, uint256 indexed electionId);
 
     // The owner of the contract can add elections.
     event NewElectionCreated(string indexed name, uint32 indexed start, uint32 indexed end);
     event ElectionEnded(string indexed name, address indexed winner, uint32 indexed totalVotes);
 
-// structs
+// structs and variables
+    // structs
     struct Election {
         string name;
         uint256 id;
@@ -52,7 +51,7 @@ contract VotingSystem is Ownable {
         address addy;
     }
 
-// variables
+    // variables
     Candidate[] public candidates;
     Voter[] public voters;
     Election[] public elections;
@@ -100,7 +99,18 @@ contract VotingSystem is Ownable {
         _;
     }
 
-// Candidate registration
+// functions
+    // constructor
+    constructor (address[] memory _candidates) 
+            Ownable(_msgSender()) {
+        for (uint256 i = 0; i < _candidates.length; i++) {
+            addCandidate(_candidates[i]);
+        }
+    }
+
+    /**
+     * @dev Candidate registration
+     */ 
     function addCandidate(address _candidate) public onlyOwner() notCandidate(_candidate) {
         candidateExists[_candidate] = true;
         candidates.push(Candidate({
@@ -111,7 +121,9 @@ contract VotingSystem is Ownable {
         emit NewCandidateAdded(_candidate);
     }
 
-// Voter registration
+    /**
+     * @dev Voter registration
+     */ 
     function registerToVote() public notVoter() {
         voterExists[_msgSender()] = true;
         voters.push(Voter({
@@ -122,7 +134,9 @@ contract VotingSystem is Ownable {
         emit NewVoterAdded(_msgSender());
     }
 
-// Election creation
+    /**
+     * @dev Election creation
+     */ 
     function createElection(string calldata _name, uint32 _start, uint32 _end) public 
             onlyOwner() {
         elections.push(Election({
@@ -138,7 +152,9 @@ contract VotingSystem is Ownable {
         emit NewElectionCreated(_name, _start, _end);
     }
 
-// Voting
+    /**
+     * @dev Vote for candidate
+     */
     function voteFor(address _candidate, uint256 _electionId) public 
             isCandidate(_candidate) isElection(_electionId) votingOpen(_electionId) hasNotVoted(_electionId) {
         addToCandidatesWithVotes(_electionId, _candidate);
@@ -148,6 +164,11 @@ contract VotingSystem is Ownable {
         emit VotedFor(_candidate, _msgSender(), _electionId);
     }
 
+    /**
+     * @dev Get voting results. Returns sorted formatted results
+     * From candidate with most votes to the one with least votes
+     * More transparent and shows candidates tied in votes
+     */
     function getVotingResultsFor(uint256 _electionId) public view
             isElection(_electionId) votingEnded(_electionId) 
             returns(bytes[] memory formattedResults) {
@@ -160,6 +181,7 @@ contract VotingSystem is Ownable {
 // Helper functions
     /**
      * @dev Adds the candidate to the list of candidates with votes in a given election if it's their first vote.
+     * Useful for the getVotingResultsFor() function
      */
     function addToCandidatesWithVotes(uint256 _electionId, address _candidate) internal {
         if (votesCountByCandidateByElection[_electionId][_candidate] == 0) {
@@ -168,6 +190,11 @@ contract VotingSystem is Ownable {
         }
     }
 
+    /**
+     * @dev Returns sorted list of candidates by votes in a given election
+     * Useful for getVotingResultsFor()
+     * Just a sorting algorithm
+     */
     function getSortedCandidatesByVotes(address[] memory _candidates, uint256 _electionId) 
             internal view returns(address[] memory) {
         uint256 i = 0; uint256 j;
@@ -186,13 +213,17 @@ contract VotingSystem is Ownable {
         return _candidates;
     }
 
+    /**
+     * @dev Format election results for the getVotingResultsFor() function
+     * For readability. i.e. "Candidate: 0x1234 ## Vote count: 5"
+     */
     function formatElectionResults(address[] memory _sortedCandidatesByVotes, uint256 _electionId) internal view
             returns(bytes[] memory formattedResults) {
         for (uint256 x = 0; x < _sortedCandidatesByVotes.length; x++) {
             formattedResults[x] = bytes.concat(
                 "Candidate: ", 
                 abi.encodePacked(_sortedCandidatesByVotes[x]), 
-                " Vote count: ", 
+                " ## Vote count: ", 
                 abi.encodePacked(votesCountByCandidateByElection[_electionId][_sortedCandidatesByVotes[x]])
             );
         }
