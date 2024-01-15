@@ -47,6 +47,7 @@ contract TokenSeller is Ownable {
     event PreSaleTokenPurchased(address indexed sender, address indexed buyer, uint weiAmount, uint tokensSent);
     event PublicSaleTokenPurchased(address indexed sender, address indexed buyer, uint weiAmount, uint tokensSent);
     event Refunded(address indexed sender, address indexed buyerToRefund, uint weiAmount);
+    event EthCollectedBy(address receiver, uint weiAmount);
 
 // constants, structs, and variables
     // Token to be sold
@@ -72,6 +73,16 @@ contract TokenSeller is Ownable {
 
     modifier publicSaleHasEnded() {
         require(saleHasEnded(publicSale), "public sale hasn't ended yet.");
+        _;
+    }
+
+    modifier preSaleMinCapReached() {
+        require(saleMinCapReached(preSale), "total min cap reached");
+        _;
+    }
+
+    modifier publicSaleMinCapReached() {
+        require(saleMinCapReached(publicSale), "total min cap reached");
         _;
     }
 
@@ -194,6 +205,43 @@ contract TokenSeller is Ownable {
         supraToken.mint(_to, supraToken.totalSupply() - (preSale.tokensSold + publicSale.tokensSold));
     }
 
+    /**
+     * @dev Collect ETH raised by presale. Can only be called by owner
+     */
+    function collectPresaleEth(address _to) public 
+            onlyOwner notZeroAddress(_to)
+            preSaleHasEnded
+            preSaleMinCapReached {
+        require(address(this).balance >= preSale.raisedWei, "not enough ETH to collect");
+        collectEther(_to, preSale.raisedWei);
+        emit EthCollectedBy(_to, preSale.raisedWei);
+    }
+
+    /**
+     * @dev Collect ETH raised by public sale. Can only be called by owner
+     */
+    function collectPublicSaleEth(address _to) public 
+            onlyOwner notZeroAddress(_to)
+            publicSaleHasEnded
+            publicSaleMinCapReached {
+        require(address(this).balance >= publicSale.raisedWei, "not enough ETH to collect");
+        collectEther(_to, publicSale.raisedWei);
+        emit EthCollectedBy(_to, publicSale.raisedWei);
+    }
+
+    /**
+     * @dev Collect all ETH raised. Can only be called by owner
+     */
+    function collectAllEth(address _to) public 
+            onlyOwner notZeroAddress(_to)
+            publicSaleHasEnded
+            preSaleMinCapReached()
+            publicSaleMinCapReached {
+        require(address(this).balance > 0, "not enough ETH to collect");
+        collectEther(_to, address(this).balance);
+        emit EthCollectedBy(_to, address(this).balance);
+    }
+
 // helper functions
     function checkPreSaleInfo(CrowdSale memory _preSale) public pure {
         require(_preSale.startTime < _preSale.endTime, "presale start >= end");
@@ -290,7 +338,7 @@ contract TokenSeller is Ownable {
     }
 
     /**
-     * @dev Gets back amount of supraToken sold and Refunds the buyer with ether
+     * @dev Refunds the buyer with ether
      * @param _buyer address of the buyer
      * @param _weiAmount amount to be refunded
      */
@@ -298,6 +346,16 @@ contract TokenSeller is Ownable {
         (bool sent, ) = payable(_buyer).call{value: _weiAmount}("");
         require(sent, "Failed to refund Ether");
         emit Refunded(address(this), _buyer, _weiAmount);
+    }
+
+    /**
+     * @dev Sends raised ether to an address chosen by the owner
+     * @param _to address to send ether to
+     * @param _weiAmount amount to be sent
+     */
+    function collectEther(address _to, uint _weiAmount) internal {
+        (bool sent, ) = payable(_to).call{value: _weiAmount}("");
+        require(sent, "Failed to collect Ether");
     }
 
 }
