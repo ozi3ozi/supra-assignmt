@@ -114,35 +114,28 @@ contract TokenSeller is Ownable {
         publicSale = _publicSale;
     }
 
-    receive() external payable {
-        emit EthReceived(_msgSender(), msg.value);
-    }
-
-    fallback() external payable {
-        require(msg.value > 0, "value must be greater than 0");
-        emit EthReceived(_msgSender(), msg.value);
-    }
-
     /**
-     * @dev Buy token with ETH. Function will be called with ether.js when EthReceived() event is emitted
+     * @dev Buy token with ETH.
      */
-    function buyTokenWithEth(address _buyer, uint _weiAmount) public payable notZeroAddress(_buyer) {
-        require(_weiAmount > 0, "value must be greater than 0");
+    function buyTokenWithEth() public payable notZeroAddress(_msgSender()) {
+        require(msg.value > 0, "value must be greater than 0");
         require(isPresalePeriod() || isPublicSalePeriod(), "sale not started");
 
         if (isPresalePeriod()) {
-            require(isValidPresalePurchase(_buyer, _weiAmount), "invalid amount. Check limits");
-            proceedWithPreSalePurchase(_buyer, _weiAmount, getTokenAmountFrom(preSale.rate, _weiAmount));
+            require(isValidPresalePurchase(_msgSender(), msg.value), "invalid amount. Check limits");
+            proceedWithPreSalePurchase(_msgSender(), msg.value, getTokenAmountFrom(preSale.rate, msg.value));
         } else { // Public sale
-            require(isValidPublicSalePurchase(_buyer, _weiAmount), "invalid amount. Check limits");
-            proceedWithPublicSalePurchase(_buyer, _weiAmount, getTokenAmountFrom(publicSale.rate, _weiAmount));
+            require(isValidPublicSalePurchase(_msgSender(), msg.value), "invalid amount. Check limits");
+            proceedWithPublicSalePurchase(_msgSender(), msg.value, getTokenAmountFrom(publicSale.rate, msg.value));
         }
+
+        emit EthReceived(_msgSender(), msg.value);
     }
 
     /**
      * @dev Refunds preSale buyer
      */
-    function refundPreSaleBuyer() public payable
+    function refundPreSaleBuyer() public
             notZeroAddress(_msgSender()) 
             isPreSaleBuyer 
             preSaleHasEnded 
@@ -156,7 +149,7 @@ contract TokenSeller is Ownable {
     /**
      * @dev Refunds publicSale buyer
      */
-    function refundPublicSaleBuyer() public payable
+    function refundPublicSaleBuyer() public
             notZeroAddress(_msgSender()) 
             isPublicSaleBuyer 
             publicSaleHasEnded 
@@ -170,7 +163,7 @@ contract TokenSeller is Ownable {
     /**
      * @dev Refunds all preSale buyers at once. Can only be called by owner
      */
-    function refundAllPreSaleBuyers() public payable onlyOwner preSaleHasEnded preSaleMinCapNotReached {
+    function refundAllPreSaleBuyers() public onlyOwner preSaleHasEnded preSaleMinCapNotReached {
         for (uint256 i = 0; i < preSale.buyers.length; i++) {
             uint256 refundAmount = weiReceivedPerBuyerPresale[preSale.buyers[i]];
             if (refundAmount > 0) {
@@ -183,7 +176,7 @@ contract TokenSeller is Ownable {
     /**
      * @dev Refunds all publicSale buyers at once. Can only be called by owner
      */
-    function refundAllPublicSaleBuyers() public payable onlyOwner publicSaleHasEnded publicSaleMinCapNotReached {
+    function refundAllPublicSaleBuyers() public onlyOwner publicSaleHasEnded publicSaleMinCapNotReached {
         for (uint256 i = 0; i < publicSale.buyers.length; i++) {
             uint256 refundAmount = weiReceivedPerBuyerPublicSale[publicSale.buyers[i]];
             if (refundAmount > 0) {
@@ -197,7 +190,7 @@ contract TokenSeller is Ownable {
      * @dev Sends remaining supra tokens after end of public sale. Can only be called by owner
      * @param _to Address to send remaining tokens to
      */
-    function sendRemainingTo(address _to) public payable onlyOwner publicSaleHasEnded {
+    function sendRemainingTo(address _to) public onlyOwner publicSaleHasEnded {
         supraToken.mint(_to, supraToken.totalSupply() - (preSale.tokensSold + publicSale.tokensSold));
     }
 
@@ -297,7 +290,7 @@ contract TokenSeller is Ownable {
      * @param _weiAmount amount to be refunded
      */
     function refundBuyer(address _buyer, uint _weiAmount) internal {
-        (bool sent, ) = _buyer.call{value: _weiAmount}("");
+        (bool sent, ) = payable(_buyer).call{value: _weiAmount}("");
         require(sent, "Failed to refund Ether");
         emit Refunded(address(this), _buyer, _weiAmount);
     }
