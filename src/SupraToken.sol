@@ -18,9 +18,8 @@ contract SupraToken is ERC20Capped, Ownable, AccessControl {
     // Used for TokenSale during preSale and publicSale
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    constructor (string memory _name, string memory _symbol, uint256 _maxSupply) 
-            ERC20Capped(_maxSupply) ERC20(_name, _symbol) Ownable(_msgSender()) {
-        grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
+    constructor (string memory _name, string memory _symbol, uint256 _maxSupply, address _owner) 
+            ERC20Capped(_maxSupply) ERC20(_name, _symbol) Ownable(_owner) {
     }
 
     function mint(address _to, uint256 _amount) public onlyRole(MINTER_ROLE) {

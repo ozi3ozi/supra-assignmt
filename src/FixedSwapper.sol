@@ -48,13 +48,13 @@ contract FixedSwapper is Context {
      * i.e. rate of 2 means 1 * 10**A_decimals = 2 * 10**B_decimals
      * the _fxdXchgRateAtoB is used to get adjusted rate based on tokens' decimals
      */
-    constructor(address _tokenA, address _tokenB, uint _fxdXchgRateAtoB) {
+    constructor(address _tokenA, uint256 _decimalsForA, address _tokenB, uint256 _decimalsForB, uint _fxdXchgRateAtoB) {
         require(_tokenA != address(0) && _tokenB != address(0), "zero address");
         require(_fxdXchgRateAtoB > 0, "zero exchange rate");
 
         tokenA = ERC20(_tokenA);
         tokenB = ERC20(_tokenB);
-        FXD_XCHG_RATE_A_TO_B = _fxdXchgRateAtoB * 10**tokenB.decimals() / 10**tokenA.decimals();
+        FXD_XCHG_RATE_A_TO_B = _fxdXchgRateAtoB * 10**_decimalsForB / 10**_decimalsForA;
     }
 
     receive() external payable {

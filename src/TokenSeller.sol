@@ -12,7 +12,7 @@ import { SupraToken } from "./SupraToken.sol";
  *      # eligibility to purchase when buyer is doing multiple buys
  *      # checking if an address is a buyer
  *      # refunding
- * - When the SupraToken is deployed it gives MINTER_ROLE to the TokenSeller contract.
+ * - After the SupraToken and TokenSeller are deployed, the deployer must give MINTER_ROLE to the TokenSeller contract.
  * - The MINT_ROLE allows the TokenSeller contract to mint tokens and send them directly to the buyer.
  * - No Need for contract owner to give allowances.
  * - I used Checks-Effects-Interactions pattern to avoid reentrancy attack on all refunding functions
@@ -24,17 +24,6 @@ import { SupraToken } from "./SupraToken.sol";
             + The owner wont have the possibility to refund all pariticpants at once.
  * - For security, readability and role of each function, I tried to keep them limited to ~4 lines
  */
-
-contract TokenSeller is Ownable {
-// events
-    event EthReceived(address indexed sender, uint amount);
-    event PreSaleTokenPurchased(address indexed sender, address indexed buyer, uint weiAmount, uint tokensSent);
-    event PublicSaleTokenPurchased(address indexed sender, address indexed buyer, uint weiAmount, uint tokensSent);
-    event Refunded(address indexed sender, address indexed buyerToRefund, uint weiAmount);
-
-// constants, structs, and variables
-    // Token to be sold
-    SupraToken public immutable supraToken;
 
     struct CrowdSale {
         // Max cap of the crowdsale in wei
@@ -51,6 +40,17 @@ contract TokenSeller is Ownable {
         uint tokensSold;
         address[] buyers;
     }
+
+contract TokenSeller is Ownable {
+// events
+    event EthReceived(address indexed sender, uint amount);
+    event PreSaleTokenPurchased(address indexed sender, address indexed buyer, uint weiAmount, uint tokensSent);
+    event PublicSaleTokenPurchased(address indexed sender, address indexed buyer, uint weiAmount, uint tokensSent);
+    event Refunded(address indexed sender, address indexed buyerToRefund, uint weiAmount);
+
+// constants, structs, and variables
+    // Token to be sold
+    SupraToken public immutable supraToken;
 
     CrowdSale public preSale;
     CrowdSale public publicSale;
