@@ -122,11 +122,11 @@ contract TokenSeller is Ownable {
         require(isPresalePeriod() || isPublicSalePeriod(), "sale not started");
 
         if (isPresalePeriod()) {
-            require(isValidPresalePurchase(_msgSender(), msg.value), "invalid amount. Check limits");
-            proceedWithPreSalePurchase(_msgSender(), msg.value, getTokenAmountFrom(preSale.rate, msg.value));
+            require(isValidPresalePurchase(), "invalid amount. Check limits");
+            proceedWithPreSalePurchase();
         } else { // Public sale
-            require(isValidPublicSalePurchase(_msgSender(), msg.value), "invalid amount. Check limits");
-            proceedWithPublicSalePurchase(_msgSender(), msg.value, getTokenAmountFrom(publicSale.rate, msg.value));
+            require(isValidPublicSalePurchase(), "invalid amount. Check limits");
+            proceedWithPublicSalePurchase();
         }
 
         emit EthReceived(_msgSender(), msg.value);
@@ -236,12 +236,12 @@ contract TokenSeller is Ownable {
         return _buyAmount > 0;
     }
 
-    function isValidPresalePurchase(address _buyer, uint _weiAmount) internal view returns (bool) {
-        return isValidPurchase(preSale, _weiAmount, weiReceivedPerBuyerPresale[_buyer]);
+    function isValidPresalePurchase() internal view returns (bool) {
+        return isValidPurchase(preSale, msg.value, weiReceivedPerBuyerPresale[_msgSender()]);
     }
 
-    function isValidPublicSalePurchase(address _buyer, uint _weiAmount) internal view returns (bool) {
-        return isValidPurchase(publicSale, _weiAmount, weiReceivedPerBuyerPublicSale[_buyer]);
+    function isValidPublicSalePurchase() internal view returns (bool) {
+        return isValidPurchase(publicSale, msg.value, weiReceivedPerBuyerPublicSale[_msgSender()]);
     }
 
     function isValidPurchase(CrowdSale memory _sale, uint _weiAmount, uint _pastWeiContribution) internal view returns (bool) {
@@ -252,24 +252,29 @@ contract TokenSeller is Ownable {
         return maxCapNotReached && minPerBuyerReached && maxPerBuyerNotReached;
     }
 
-    function proceedWithPreSalePurchase(address _buyer, uint _weiAmount, uint tokensToSend) internal {
-        supraToken.mint(_buyer, tokensToSend);
-        weiReceivedPerBuyerPresale[_buyer] += _weiAmount;
-        preSale.raisedWei += _weiAmount;
-        preSale.tokensSold += tokensToSend;
-        preSale.buyers.push(_buyer);
+    function proceedWithPreSalePurchase() internal {
+        uint tokensToSend = getTokenAmountFrom(preSale.rate, msg.value);
+        
+        proceedWithCrowdSalePurchase(preSale, tokensToSend);
+        weiReceivedPerBuyerPresale[_msgSender()] += msg.value;
 
-        emit PreSaleTokenPurchased(address(this), _buyer, _weiAmount, tokensToSend);
+        emit PreSaleTokenPurchased(address(this), _msgSender(), msg.value, tokensToSend);
     }
 
-    function proceedWithPublicSalePurchase(address _buyer, uint _weiAmount, uint tokensToSend) internal {
-        supraToken.mint(_buyer, tokensToSend);
-        weiReceivedPerBuyerPublicSale[_buyer] += _weiAmount;
-        publicSale.raisedWei += _weiAmount;
-        publicSale.tokensSold += tokensToSend;
-        publicSale.buyers.push(_buyer);
+    function proceedWithPublicSalePurchase() internal {
+        uint tokensToSend = getTokenAmountFrom(publicSale.rate, msg.value);
 
-        emit PublicSaleTokenPurchased(address(this), _buyer, _weiAmount, tokensToSend);
+        proceedWithCrowdSalePurchase(publicSale, tokensToSend);
+        weiReceivedPerBuyerPublicSale[_msgSender()] += msg.value;
+
+        emit PublicSaleTokenPurchased(address(this), _msgSender(), msg.value, tokensToSend);
+    }
+
+    function proceedWithCrowdSalePurchase(CrowdSale storage _sale, uint _tokensToSend) internal {
+        supraToken.mint(_msgSender(), _tokensToSend);
+        _sale.raisedWei += msg.value;
+        _sale.tokensSold += _tokensToSend;
+        _sale.buyers.push(_msgSender());
     }
 
     function getPresaleTokenAmntFor(uint _wei) internal view returns (uint) {
