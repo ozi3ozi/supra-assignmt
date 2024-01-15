@@ -47,14 +47,14 @@ contract Deploy is Script {
 
     function run() public {
         vm.startBroadcast();
-        
+
         console.log(msg.sender);
         multiSigWallet = new MultiSigWallet(owners, 80);
         votingSystem = new VotingSystem(owners);
         tokenA = new SupraToken("TokenA", "ATOK", 1000000* 10**18, msg.sender);
         tokenB = new SupraToken("TokenB", "BOTK", 1_000_000* 10**14, msg.sender);
         fixedSwapper = new FixedSwapper(address(tokenA), tokenA.decimals(), address(tokenB), tokenB.decimals(), 4);
-        tokenSeller = new TokenSeller(address(tokenA), preSale, publicSale);
+        tokenSeller = new TokenSeller(address(tokenA), 1000000* 10**18, preSale, publicSale);
 
         vm.stopBroadcast();
     }

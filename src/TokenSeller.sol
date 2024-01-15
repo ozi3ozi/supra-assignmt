@@ -114,9 +114,10 @@ contract TokenSeller is Ownable {
      * @param _preSale Presale information
      * @param _publicSale Public sale information
      */
-    constructor(address _tokenToSell, CrowdSale memory _preSale, CrowdSale memory _publicSale) 
+    constructor(address _tokenToSell, uint256 _tknTotalSupply, CrowdSale memory _preSale, CrowdSale memory _publicSale) 
             Ownable(_msgSender()) 
             notZeroAddress(_tokenToSell) {
+        require(_tknTotalSupply >= _preSale.maxCap + _publicSale.maxCap, "max caps exceed total supply");
         checkPreSaleInfo(_preSale);
         checkPublicSaleInfo(_publicSale, _preSale.endTime);
 
